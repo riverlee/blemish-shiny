@@ -1,4 +1,5 @@
 library(shiny)
+library(formattable)
 options(shiny.maxRequestSize=100*1024^2) 
 shinyUI(
   fluidPage(
@@ -30,7 +31,8 @@ shinyUI(
         ),
       mainPanel( 
           tabsetPanel(
-              tabPanel("Summary",tableOutput("summary")),
+              #tabPanel("Summary",tableOutput("summary")),
+              tabPanel("Summary",formattableOutput("summary")),
               #tabPanel("Details",uiOutput("plots"))
               tabPanel("Details",plotOutput("fig",height=800,width=800))
             )

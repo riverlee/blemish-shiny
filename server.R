@@ -3,6 +3,7 @@ library(dplyr)
 library(googleVis)
 library(ggplot2)
 library(readr)
+library(formattable)
 ### https://www.youtube.com/watch?v=HPZSunrSo5M
 options(shiny.maxRequestSize=100*1024^2)  ## upload max file 100M
 source("heatmap.R")
@@ -39,7 +40,7 @@ shinyServer(function(input,output){
  })
  
  ## Summary tab
- output$summary<-renderGvis({
+ output$summary_notrun<-renderGvis({
     if(is.null(data())){return()}
     
     dd = data()
@@ -52,6 +53,25 @@ shinyServer(function(input,output){
     d$`blemish_pct(%)` = sprintf("%.2f",d$n/(992*992)*100)
     d2 = select(d,cel_idx,celfile,blemish_probes=n,`blemish_pct(%)`)
     gvisTable(d2)
+ })
+ output$summary<-renderFormattable({
+    if(is.null(data())){return()}
+    
+    dd = data()
+    blemish.dat=dd$blemish.dat
+    cel.files = dd$cel
+
+    ## For each cel file, get how many probes are in the blemish region        
+    d = group_by(blemish.dat,cel_idx) %>% summarize(n=n())
+    d$celfile=basename(cel.files[ d$cel_idx+1])
+    d$`blemish_pct(%)` = sprintf("%.2f",d$n/(992*992)*100)
+    d2 = select(d,cel_idx,celfile,blemish_probes=n,`blemish_pct(%)`)
+    #gvisTable(d2)
+    formattable(d2,list(
+                     area(col=c(`blemish_pct(%)`))~normalize_bar("pink",0.2),
+                     #area(col=c(blemish_probes))~normalize_bar("green",0.2)   
+                     blemish_probes = color_tile("white","orange")
+                      ))
  })
 
 ## Output seleted figures ### 

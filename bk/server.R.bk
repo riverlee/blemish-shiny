@@ -1,0 +1,105 @@
+library(shiny)
+library(dplyr)
+library(googleVis)
+library(ggplot2)
+library(readr)
+### https://www.youtube.com/watch?v=HPZSunrSo5M
+options(shiny.maxRequestSize=100*1024^2) 
+source("heatmap.R")
+max_plots =  5
+
+shinyServer(function(input,output){
+  
+  data <- reactive({
+    cel.infile = input$cel.infile
+    blemish.infile = input$blemish.infile
+    
+    if(is.null(cel.infile) || is.null(blemish.infile)){return()}
+    
+    ## Read the cel file list 
+    cel.files = scan(cel.infile$datapath,what="",skip=1)
+    
+
+    ## Read blemish table 
+    #blemish.dat = read.table(blemish.infile$datapath,sep = "\t",header = T)
+    blemish.dat = read_delim(blemish.infile$datapath,delim="\t")
+    list(cel.files = cel.files,blemish.dat=blemish.dat)
+  })
+
+ ## Summary tab
+ output$summary<-renderGvis({
+    if(is.null(data())){return()}
+    
+    dd = data()
+    blemish.dat=dd$blemish.dat
+    cel.files = dd$cel
+    ## For each cel file, get how many probes are in the blemish region        
+    d = group_by(blemish.dat,cel_idx) %>% summarize(n=n())
+    d$celfile=basename(cel.files[ d$cel_idx+1])
+    d$`blemish_pct(%)` = sprintf("%.2f",d$n/(992*992)*100)
+    d2 = select(d,cel_idx,celfile,blemish_probes=n,`blemish_pct(%)`)
+    gvisTable(d2)
+ })
+ 
+## Output fig
+### From https://gist.github.com/wch/5436415/
+output$plots <- renderUI({
+    plot_output_list<-lapply(1:length(data()$cel.files),function(i){
+                         plotname<-paste("plot",i,sep="")
+                         plotOutput(plotname,height = 400,width=800)     
+                       })
+
+   do.call(tagList,plot_output_list) 
+
+})
+
+for (i in 1:max_plots) {
+    # Need local so that each item gets its own number. Without it, the value
+    # of i in the renderPlot() will be the same across all instances, because
+    # of when the expression is evaluated.
+    local({
+      my_i <- i
+      plotname <- paste("plot", my_i, sep="")
+
+      output[[plotname]] <- renderPlot({
+        if(is.null(data())){return()}
+
+        dd = data()
+        blemish.dat=dd$blemish.dat
+        cel.files = dd$cel
+
+        cat("[",date(),"] Doing ",my_i,"\n")
+        if(my_i<=length(cel.files)){
+            intensity = get.x.y.intensity.from.cel(cel.infile = cel.files[my_i])
+            blemish.xy = filter(blemish.dat,cel_idx==my_i-1)%>%select(X=x,Y=y)
+
+            cat("\t[",date(),"] Doing ",my_i," ploting\n")
+            p=my.heatmap(intensity = intensity,blemish.xy = blemish.xy,tl = basename(cel.files[my_i])) 
+            print(p)
+        }
+        
+      })
+    })
+  }
+output$fig<-renderPlot({
+    if(is.null(data())){return()}
+
+    dd = data()
+    blemish.dat=dd$blemish.dat
+    cel.files = dd$cel
+
+    for(i in 1:2){
+       cat(i,"\n")
+       intensity = get.x.y.intensity.from.cel(cel.infile = cel.files[i])
+       blemish.xy = filter(blemish.dat,cel_idx==i-1)%>%select(X=x,Y=y)
+       p=my.heatmap(intensity = intensity,blemish.xy = blemish.xy,tl = cel.files[i]) 
+       print(p)
+
+    }
+    
+
+}
+)
+      
+}
+)
